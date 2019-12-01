@@ -2,6 +2,8 @@
 #include <boost/chrono.hpp>
 #include <boost/asio/ip/detail/endpoint.hpp>
 #include <boost/asio/io_service.hpp>
+#include <boost/asio.hpp>
+#include <string>
 #include <ctime>   // localtime
 #include <sstream> // stringstream
 #include <iomanip> // put_time
@@ -11,6 +13,7 @@
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
+#include <thread>
 
 
 using namespace boost::chrono;
@@ -63,17 +66,83 @@ std::stringstream BuildTelegrammTree(TelegrammItems *pItems )
 	return(Telegramm);
 }
 
+
+
+class boost_udp_send_faf {
+	boost::asio::io_service io_service;
+	boost::asio::ip::udp::socket socket;
+	boost::asio::ip::udp::endpoint remote_endpoint;
+
+
+
+
+
+public:
+
+	boost_udp_send_faf(const std::string& ip_address, const int port, const bool broadcast = false) : socket(io_service) {
+
+		// Open socket
+		socket.open(boost::asio::ip::udp::v4());
+
+		// I wouldn't recommend broadcasting unless you are
+		// in complete control of your subnet and know
+		// what's on it and how it will react
+		if (broadcast) {
+			boost::asio::socket_base::broadcast option(true);
+			socket.set_option(option);
+		}
+
+		// make endpoint
+		remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::make_address(ip_address.c_str()), port);
+	}
+
+	//void handle_send(boost::shared_ptr<std::string> /*message*/,
+	//	const boost::system::error_code& /*error*/,
+	//	std::size_t /*bytes_transferred*/)
+	//{
+	//}
+
+	// Send a string to the preconfigured endpoint
+	// via the open socket.
+	void send(const std::string& message) {
+		boost::system::error_code ignored_error;
+		socket.send_to(boost::asio::buffer(message), remote_endpoint, 0, ignored_error);
+		//socket.async_send_to(boost::asio::buffer(message), remote_endpoint,
+		//	boost::bind(&boost_udp_send_faf::handle_send, this, message,
+		//		boost::asio::placeholders::error,
+		//		boost::asio::placeholders::bytes_transferred));
+
+		
+	}
+
+	// Send some binary data to the preconfigured endpoint
+	// via the open socket.
+	void send(const unsigned char* data, const int len) {
+		boost::system::error_code ignored_error;
+		socket.send_to(boost::asio::buffer(data, len), remote_endpoint, 0, ignored_error);
+	}
+};
+
 int main()
 {
 	TelegrammItems TeleItems;
 	TeleItems.AnalogValue1 = 1;
 	TeleItems.AnalogValue2 = 2;
-	TeleItems.SentCounter  = 3;
+	TeleItems.SentCounter  = 0;
 	TeleItems.timestamp    = PrintTimestamp();
 
 	cout << PrintTimestamp() << endl;
+    cout << BuildTelegrammTree(&TeleItems).str();
 
-	cout << BuildTelegrammTree(&TeleItems).str();
+	boost_udp_send_faf sender("127.0.0.1", 10000);
+
+	for (;;)
+	{
+		TeleItems.SentCounter++;
+		printf("Sent Telegramm : %u \n",TeleItems.SentCounter);
+		sender.send( BuildTelegrammTree(&TeleItems).str() );
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	}
 }
 
 // Programm ausführen: STRG+F5 oder "Debuggen" > Menü "Ohne Debuggen starten"
