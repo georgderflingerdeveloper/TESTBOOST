@@ -5,6 +5,12 @@
 #include <ctime>   // localtime
 #include <sstream> // stringstream
 #include <iomanip> // put_time
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/optional.hpp>
+#include <iostream>
+#include <sstream>
+#include <cstdlib>
 
 
 using namespace boost::chrono;
@@ -15,7 +21,7 @@ using namespace std;
 
 #pragma warning(disable : 4996)
 
-void PrintTimestamp()
+long PrintTimestamp( )
 {
 	auto TimePoint = high_resolution_clock::now();
 	auto now       = system_clock::now();
@@ -26,16 +32,48 @@ void PrintTimestamp()
 	seconds s = duration_cast<seconds>(ms);
 	time_t t = s.count();
 	size_t fractional_seconds = ms.count() % 1000;
-	
 
-	std::cout << put_time(localtime(&in_time_t), "%Y-%m-%d %X:");
-	std::cout << fractional_seconds << std::endl;;
-	std::cout << in_time_t << std::endl;
+	cout << put_time(localtime(&in_time_t), "%Y-%m-%d %X:");
+	cout << fractional_seconds << endl;
+
+	return(in_time_t);
+}
+
+struct TelegrammItems
+{
+   boost::property_tree::ptree TelegrammTree;
+   long timestamp;
+   int AnalogValue1;
+   int AnalogValue2;
+   long SentCounter;
+};
+
+
+std::stringstream BuildTelegrammTree(TelegrammItems *pItems )
+{
+	std::stringstream Telegramm;
+
+	pItems->TelegrammTree.put("Timestamp",    pItems->timestamp);
+	pItems->TelegrammTree.put("AnalogValue1", pItems->AnalogValue1);
+	pItems->TelegrammTree.put("AnalogValue2", pItems->AnalogValue2);
+	pItems->TelegrammTree.put("SentCounter",  pItems->SentCounter);
+
+	boost::property_tree::json_parser::write_json(Telegramm, pItems->TelegrammTree);
+
+	return(Telegramm);
 }
 
 int main()
 {
-	PrintTimestamp();
+	TelegrammItems TeleItems;
+	TeleItems.AnalogValue1 = 1;
+	TeleItems.AnalogValue2 = 2;
+	TeleItems.SentCounter  = 3;
+	TeleItems.timestamp    = PrintTimestamp();
+
+	cout << PrintTimestamp() << endl;
+
+	cout << BuildTelegrammTree(&TeleItems).str();
 }
 
 // Programm ausführen: STRG+F5 oder "Debuggen" > Menü "Ohne Debuggen starten"
