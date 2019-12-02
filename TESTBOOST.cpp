@@ -14,6 +14,10 @@
 #include <sstream>
 #include <cstdlib>
 #include <thread>
+#include <boost/array.hpp>
+#include <boost/bind.hpp>
+#include <boost/shared_ptr.hpp>
+
 
 
 using namespace boost::chrono;
@@ -68,13 +72,20 @@ std::stringstream BuildTelegrammTree(TelegrammItems *pItems )
 
 
 
+
+
 class boost_udp_send_faf {
+
+private:
 	boost::asio::io_service io_service;
 	boost::asio::ip::udp::socket socket;
 	boost::asio::ip::udp::endpoint remote_endpoint;
 
-
-
+	void handle_send(boost::shared_ptr<std::string> /*message*/,
+		const boost::system::error_code& /*error*/,
+		std::size_t /*bytes_transferred*/)
+	{
+	}
 
 
 public:
@@ -96,21 +107,19 @@ public:
 		remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::make_address(ip_address.c_str()), port);
 	}
 
-	//void handle_send(boost::shared_ptr<std::string> /*message*/,
-	//	const boost::system::error_code& /*error*/,
-	//	std::size_t /*bytes_transferred*/)
-	//{
-	//}
+
 
 	// Send a string to the preconfigured endpoint
 	// via the open socket.
-	void send(const std::string& message) {
+	void send(const std::string& message) {	
 		boost::system::error_code ignored_error;
-		socket.send_to(boost::asio::buffer(message), remote_endpoint, 0, ignored_error);
-		//socket.async_send_to(boost::asio::buffer(message), remote_endpoint,
-		//	boost::bind(&boost_udp_send_faf::handle_send, this, message,
-		//		boost::asio::placeholders::error,
-		//		boost::asio::placeholders::bytes_transferred));
+		boost::shared_ptr<std::string> message_(
+			new std::string(message));
+
+		socket.async_send_to(boost::asio::buffer(*message_), remote_endpoint,
+			boost::bind(&boost_udp_send_faf::handle_send, this, message_,
+				boost::asio::placeholders::error,
+				boost::asio::placeholders::bytes_transferred));
 
 		
 	}
@@ -122,6 +131,68 @@ public:
 		socket.send_to(boost::asio::buffer(data, len), remote_endpoint, 0, ignored_error);
 	}
 };
+
+
+using boost::asio::ip::udp;
+
+std::string make_daytime_string()
+{
+	using namespace std; // For time_t, time and ctime;
+	time_t now = time(0);
+	return ctime(&now);
+}
+
+class udp_server
+{
+public:
+	udp_server(boost::asio::io_context& io_context)
+		: socket_(io_context, udp::endpoint(udp::v4(), 13))
+	{
+		start_receive();
+	}
+
+private:
+	void start_receive()
+	{
+		socket_.async_receive_from(
+			boost::asio::buffer(recv_buffer_), remote_endpoint_,
+			boost::bind(&udp_server::handle_receive, this,
+				boost::asio::placeholders::error,
+				boost::asio::placeholders::bytes_transferred));
+	}
+
+	void handle_receive(const boost::system::error_code& error,
+		std::size_t /*bytes_transferred*/)
+	{
+		if (!error)
+		{
+			boost::shared_ptr<std::string> message(
+				new std::string(make_daytime_string()));
+
+			socket_.async_send_to(boost::asio::buffer(*message), remote_endpoint_,
+				boost::bind(&udp_server::handle_send, this, message,
+					boost::asio::placeholders::error,
+					boost::asio::placeholders::bytes_transferred));
+
+			start_receive();
+		}
+	}
+
+	void handle_send(boost::shared_ptr<std::string> /*message*/,
+		const boost::system::error_code& /*error*/,
+		std::size_t /*bytes_transferred*/)
+	{
+	}
+
+	udp::socket socket_;
+	udp::endpoint remote_endpoint_;
+	boost::array<char, 1> recv_buffer_;
+};
+
+
+
+
+
 
 int main()
 {
