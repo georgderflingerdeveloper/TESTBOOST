@@ -55,7 +55,6 @@ struct TelegrammItems
    long SentCounter;
 };
 
-
 std::stringstream BuildTelegrammTree(TelegrammItems *pItems )
 {
 	std::stringstream Telegramm;
@@ -70,11 +69,7 @@ std::stringstream BuildTelegrammTree(TelegrammItems *pItems )
 	return(Telegramm);
 }
 
-
-
-
-
-class boost_udp_send_faf {
+class UdpSender {
 
 private:
 	boost::asio::io_service io_service;
@@ -90,7 +85,7 @@ private:
 
 public:
 
-	boost_udp_send_faf(const std::string& ip_address, const int port, const bool broadcast = false) : socket(io_service) {
+	UdpSender(const std::string& ip_address, const int port, const bool broadcast = false) : socket(io_service) {
 
 		// Open socket
 		socket.open(boost::asio::ip::udp::v4());
@@ -117,7 +112,7 @@ public:
 			new std::string(message));
 
 		socket.async_send_to(boost::asio::buffer(*message_), remote_endpoint,
-			boost::bind(&boost_udp_send_faf::handle_send, this, message_,
+			boost::bind(&UdpSender::handle_send, this, message_,
 				boost::asio::placeholders::error,
 				boost::asio::placeholders::bytes_transferred));
 
@@ -132,68 +127,6 @@ public:
 	}
 };
 
-
-using boost::asio::ip::udp;
-
-std::string make_daytime_string()
-{
-	using namespace std; // For time_t, time and ctime;
-	time_t now = time(0);
-	return ctime(&now);
-}
-
-class udp_server
-{
-public:
-	udp_server(boost::asio::io_context& io_context)
-		: socket_(io_context, udp::endpoint(udp::v4(), 13))
-	{
-		start_receive();
-	}
-
-private:
-	void start_receive()
-	{
-		socket_.async_receive_from(
-			boost::asio::buffer(recv_buffer_), remote_endpoint_,
-			boost::bind(&udp_server::handle_receive, this,
-				boost::asio::placeholders::error,
-				boost::asio::placeholders::bytes_transferred));
-	}
-
-	void handle_receive(const boost::system::error_code& error,
-		std::size_t /*bytes_transferred*/)
-	{
-		if (!error)
-		{
-			boost::shared_ptr<std::string> message(
-				new std::string(make_daytime_string()));
-
-			socket_.async_send_to(boost::asio::buffer(*message), remote_endpoint_,
-				boost::bind(&udp_server::handle_send, this, message,
-					boost::asio::placeholders::error,
-					boost::asio::placeholders::bytes_transferred));
-
-			start_receive();
-		}
-	}
-
-	void handle_send(boost::shared_ptr<std::string> /*message*/,
-		const boost::system::error_code& /*error*/,
-		std::size_t /*bytes_transferred*/)
-	{
-	}
-
-	udp::socket socket_;
-	udp::endpoint remote_endpoint_;
-	boost::array<char, 1> recv_buffer_;
-};
-
-
-
-
-
-
 int main()
 {
 	TelegrammItems TeleItems;
@@ -205,7 +138,7 @@ int main()
 	cout << PrintTimestamp() << endl;
     cout << BuildTelegrammTree(&TeleItems).str();
 
-	boost_udp_send_faf sender("127.0.0.1", 10000);
+	UdpSender sender("127.0.0.1", 10000);
 
 	for (;;)
 	{
@@ -216,13 +149,3 @@ int main()
 	}
 }
 
-// Programm ausführen: STRG+F5 oder "Debuggen" > Menü "Ohne Debuggen starten"
-// Programm debuggen: F5 oder "Debuggen" > Menü "Debuggen starten"
-
-// Tipps für den Einstieg: 
-//   1. Verwenden Sie das Projektmappen-Explorer-Fenster zum Hinzufügen/Verwalten von Dateien.
-//   2. Verwenden Sie das Team Explorer-Fenster zum Herstellen einer Verbindung mit der Quellcodeverwaltung.
-//   3. Verwenden Sie das Ausgabefenster, um die Buildausgabe und andere Nachrichten anzuzeigen.
-//   4. Verwenden Sie das Fenster "Fehlerliste", um Fehler anzuzeigen.
-//   5. Wechseln Sie zu "Projekt" > "Neues Element hinzufügen", um neue Codedateien zu erstellen, bzw. zu "Projekt" > "Vorhandenes Element hinzufügen", um dem Projekt vorhandene Codedateien hinzuzufügen.
-//   6. Um dieses Projekt später erneut zu öffnen, wechseln Sie zu "Datei" > "Öffnen" > "Projekt", und wählen Sie die SLN-Datei aus.
