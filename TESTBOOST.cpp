@@ -28,10 +28,11 @@ using namespace std;
 
 #pragma warning(disable : 4996)
 
-long PrintTimestamp( )
+long long PrintTimestamp( )
 {
 	auto TimePoint = high_resolution_clock::now();
 	auto now       = system_clock::now();
+	//auto in_time_t = system_clock::to_time_t(now);
 	auto in_time_t = system_clock::to_time_t(now);
 
 	milliseconds ms = duration_cast<milliseconds>(TimePoint.time_since_epoch());
@@ -43,16 +44,18 @@ long PrintTimestamp( )
 	cout << put_time(localtime(&in_time_t), "%Y-%m-%d %X:");
 	cout << fractional_seconds << endl;
 
-	return(in_time_t);
+	auto TimestampFullms = (in_time_t * 1000) + fractional_seconds;
+
+	return(TimestampFullms);
 }
 
 struct TelegrammItems
 {
    boost::property_tree::ptree TelegrammTree;
-   long timestamp;
-   int AnalogValue1;
-   int AnalogValue2;
-   long SentCounter;
+   long long timestamp = 0;
+   int  AnalogValue1   = 0;
+   int  AnalogValue2   = 0;
+   long SentCounter    = 0;
 };
 
 std::stringstream BuildTelegrammTree(TelegrammItems *pItems )
@@ -76,13 +79,6 @@ private:
 	boost::asio::ip::udp::socket socket;
 	boost::asio::ip::udp::endpoint remote_endpoint;
 
-	void handle_send(boost::shared_ptr<std::string> /*message*/,
-		const boost::system::error_code& /*error*/,
-		std::size_t /*bytes_transferred*/)
-	{
-	}
-
-
 public:
 
 	UdpSender(const std::string& ip_address, const int port, const bool broadcast = false) : socket(io_service) {
@@ -100,30 +96,24 @@ public:
 
 		// make endpoint
 		remote_endpoint = boost::asio::ip::udp::endpoint(boost::asio::ip::make_address(ip_address.c_str()), port);
+	
 	}
-
 
 
 	// Send a string to the preconfigured endpoint
 	// via the open socket.
-	void send(const std::string& message) {	
-		boost::system::error_code ignored_error;
-		boost::shared_ptr<std::string> message_(
-			new std::string(message));
-
-		socket.async_send_to(boost::asio::buffer(*message_), remote_endpoint,
-			boost::bind(&UdpSender::handle_send, this, message_,
-				boost::asio::placeholders::error,
-				boost::asio::placeholders::bytes_transferred));
-
-		
+	void sendAsync(const std::string& message)
+	{
+		socket.async_send_to(
+			boost::asio::buffer(message), remote_endpoint,
+			[this](boost::system::error_code /*ec*/, std::size_t /*bytes_sent*/)
+			{
+			});
 	}
-
-	// Send some binary data to the preconfigured endpoint
-	// via the open socket.
-	void send(const unsigned char* data, const int len) {
+	
+	void sendSync(const std::string& message) {
 		boost::system::error_code ignored_error;
-		socket.send_to(boost::asio::buffer(data, len), remote_endpoint, 0, ignored_error);
+		socket.send_to(boost::asio::buffer(message), remote_endpoint, 0, ignored_error);
 	}
 };
 
@@ -144,8 +134,8 @@ int main()
 	{
 		TeleItems.SentCounter++;
 		printf("Sent Telegramm : %u \n",TeleItems.SentCounter);
-		sender.send( BuildTelegrammTree(&TeleItems).str() );
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		sender.sendSync(BuildTelegrammTree(&TeleItems).str());
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
